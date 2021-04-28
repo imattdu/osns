@@ -124,6 +124,37 @@ class UserProfile(db.Model):
     # 建立用户的一对一关系属性user.note_list  note.user
     user = db.relationship('User', backref=db.backref('profile', lazy='dynamic'))
 
+    def serialize(self):
+        return {
+            'id': self.id,
+            'real_name': self.real_name,
+            'sex': self.sex,
+            'maxim': self.maxim,
+            'address': self.address,
+            'created_at': self.created_at.strftime('%Y-%m-%d'),
+            'updated_at': self.updated_at.strftime('%Y-%m-%d'),
+            'user_id': self.user_id
+        }
+
+    def __init__(self):
+        pass
+
+    def __init__(self, real_name, sex, maxim, address, user_id):
+        self.real_name = real_name
+        self.sex = sex
+        self.maxim = maxim
+        self.address = address
+        self.user_id = user_id
+
+    @staticmethod
+    def get_user_profile_by_uid(uid):
+        userprofile =  UserProfile.query.filter_by(user_id=uid).first()
+        return userprofile
+
+    @staticmethod
+    def update_user_profile(userprofile):
+        db.session.add(userprofile)
+        db.session.commit()
 
 class Note(db.Model):
     """ 用户模型 """
@@ -155,10 +186,18 @@ class Note(db.Model):
             'content': self.content,
             'is_valid': self.is_valid,
             'view_count': self.view_count,
-            'created_at': self.created_at.strftime('%Y-%m-%d'),
-            'updated_at': self.updated_at.strftime('%Y-%m-%d'),
+            'created_at': self.created_at.strftime('%Y/%m/%d %H:%M:%S'),
+            'updated_at': self.updated_at.strftime('%Y/%m/%d %H:%M:%S'),
             'user_id': self.user_id,
         }
+
+    def __init__(self):
+        pass
+
+    def __init__(self, title, content, user_id):
+        self.title = title
+        self.content = content
+        self.user_id = user_id
 
     @staticmethod
     def save_note(note):
@@ -224,9 +263,9 @@ class NoteTag(db.Model):
     updated_at = db.Column(db.DateTime,
                            default=datetime.now, onupdate=datetime.now)
     # 关联用户
-    note_id = db.Column(db.Integer, db.ForeignKey('note_note.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('accounts_user.id'))
     # 建立用户的一对一关系属性user.note_list  note.user
-    note = db.relationship('Note', backref=db.backref('note_tag_list', lazy='dynamic'))
+    user = db.relationship('User', backref=db.backref('note_tag_list', lazy='dynamic'))
 
     """序列化"""
     def serialize(self):
@@ -236,29 +275,33 @@ class NoteTag(db.Model):
             'is_valid': self.is_valid,
             'created_at': self.created_at.strftime('%Y/%m/%d %H:%M:%S'),
             'updated_at': self.updated_at.strftime('%Y/%m/%d %H:%M:%S'),
-            'note_id': self.note_id
+            'user_id': self.user_id
         }
 
     @staticmethod
-    def save(tag_name, note_id):
+    def save(tag_name, user_id):
         note_tag = NoteTag()
         note_tag.tag_name = tag_name
-        note_tag.note_id = note_id
+        note_tag.user_id = user_id
         db.session.add(note_tag)
         db.session.commit()
 
     @staticmethod
-    def delete_note_tag_by_note_id(note_id):
-        note_tag_list = NoteTag.query.filter_by(note_id=note_id).all()
+    def save_obj(note_tag):
+        db.session.add(note_tag)
+        db.session.commit()
+
+    @staticmethod
+    def delete_note_tag_by_note_id(user_id):
+        note_tag_list = NoteTag.query.filter_by(user_id=user_id).all()
         for note_tag in note_tag_list:
             note_tag.is_valid = 0
             db.session.add(note_tag)
             db.session.commit()
 
     @staticmethod
-    def list_note_tag_by_note_id(note_id):
-
-        note_tag_list = NoteTag.query.filter_by(note_id=note_id, is_valid=1).all()
+    def list_note_tag_by_user_id(user_id):
+        note_tag_list = NoteTag.query.filter_by(user_id=user_id, is_valid=1).all()
         return note_tag_list
 
     @staticmethod
@@ -267,11 +310,53 @@ class NoteTag(db.Model):
         return note_tag_list
 
     @staticmethod
-    def get_note_tag_by_name(tag_name, note_id):
-        note_tag = NoteTag.query.filter_by(tag_name=tag_name,note_id=note_id,is_valid=1).first()
+    def get_note_tag_by_name(tag_name, user_id):
+        note_tag = NoteTag.query.filter_by(tag_name=tag_name,user_id=user_id,is_valid=1).first()
+        return note_tag
+
+    @staticmethod
+    def get_note_tag_by_id(id):
+        note_tag = NoteTag.query.filter_by(id=id, is_valid=1).first()
         return note_tag
 
 
+
+
+
+class NoteAndNoteTag(db.Model):
+    """ 笔记分享 """
+    __tablename__ = 'note_and_note_tag'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)  # 主键
+    is_valid = db.Column(db.SmallInteger, default=1)
+
+    # 关联笔记
+    note_id = db.Column(db.Integer, db.ForeignKey('note_note.id'))
+    # 建立用户的一对一关系属性user.note_list  note.user
+    # user = db.relationship('User', backref=db.backref('note_tag_list', lazy='dynamic'))
+    # 关联标签
+    note_tag_id = db.Column(db.Integer, db.ForeignKey('note_note_tag.id'))
+
+    def __init__(self):
+        pass
+
+    def __init__(self, note_id, note_tag_id):
+        self.note_id = note_id
+        self.note_tag_id = note_tag_id
+
+    @staticmethod
+    def save_note_and_note_tag(note_and_note_tag):
+        db.session.add(note_and_note_tag)
+        db.session.commit()
+
+    @staticmethod
+    def list_note_and_note_tag_by_note_id(note_id):
+        note_and_note_tag_list = NoteAndNoteTag.query.filter_by(note_id=note_id, is_valid=1).all()
+        return note_and_note_tag_list
+
+    @staticmethod
+    def list_note_and_note_tag_by_note_tag_id(note_tag_id):
+        note_and_note_tag_list = NoteAndNoteTag.query.filter_by(note_tag_id=note_tag_id, is_valid=1).all()
+        return note_and_note_tag_list
 
 
 
