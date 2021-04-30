@@ -51,7 +51,7 @@ def uploader():
         filename = str(time.time()) + str(random.randint(1, 9)) + '.' + filename_list[1]
         # f.save(os.path.join(app.config['UPLOAD_FOLDER'],secure_filename(f.filename)))
         f.save(os.path.join(app.config['UPLOAD_FOLDER'],filename))
-        url = 'http://127.0.0.1:9000/static/' + filename
+        url = 'http://osns.cn1.utools.club/static/' + filename
         return url
 
 

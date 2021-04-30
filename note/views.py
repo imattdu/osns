@@ -2,10 +2,12 @@ from flask import Blueprint, render_template, request, make_response, jsonify
 from flask_cors import cross_origin
 from app import db
 from models import Note, NoteForward, NoteTag, User, NoteAndNoteTag
+from utils.constants import ResCode
+from utils.res import Res
 
 note = Blueprint('note', __name__)
 
-
+"""添加笔记"""
 @note.route('/save', methods=['POST'])
 @cross_origin(origins='*', supports_credentials=True)
 def save_note():
@@ -26,7 +28,6 @@ def save_note():
     Note.save_note(note)
 
     # NoteAndNoteTag.list_note_and_note_tag_by_note_id(note.id)
-
     if len(param_note_tags) != 0:
         data_note_tags = NoteTag.list_note_tag_by_user_id(param_user.get('id'))
         print(data_note_tags)
@@ -54,10 +55,9 @@ def save_note():
             i.is_valid = 0
             NoteAndNoteTag.save_note_and_note_tag(i)
 
-    return ''
+    return make_response(jsonify(ResCode.NOTE_SUCCESS.value, '', {}), 200)
 
-
-
+"""测试方法"""
 def save_note_test():
     param_note = request.get_json(silent=True)
     note_tags = param_note.get('tags')
@@ -92,7 +92,6 @@ def save_note_test():
 
     return make_response('success', 200)
 
-
 @note.route('/remove/<id>', methods=['GET'])
 @cross_origin(origins='*', supports_credentials=True)
 def remove_note_by_id(id):
@@ -106,7 +105,7 @@ def remove_note_by_id(id):
 @note.route('/restore/<id>', methods=['GET'])
 @cross_origin(origins='*', supports_credentials=True)
 def restore_note(id):
-    """恢复笔记"""
+    """ 恢复笔记 """
     restore_note = Note.query.filter_by(id=id).first()
     restore_note.is_valid = 1
     db.session.add(restore_note)
@@ -115,49 +114,26 @@ def restore_note(id):
     note_list = Note.query.filter_by(user_id=restore_note.user_id, is_valid=0).all()
     return jsonify(res_note_list=[i.serialize() for i in note_list])
 
-@note.route('/remove/forever/<id>', methods=['GET'])
+""" 根据笔记ID查找笔记 """
+@note.route('/<id>', methods=['GET'])
 @cross_origin(origins='*', supports_credentials=True)
-def remove_note_forever(id):
-    """永久删除"""
-    restore_note = Note.query.filter_by(id=id).first()
-    restore_note.is_valid = 9
-    db.session.add(restore_note)
-    db.session.commit()
+def get_note_by_id(id):
+    note = Note.query.filter_by(id=id).first()
+    if note == None:
+        return make_response(jsonify(Res.ok(ResCode.NOTE_SUCCESS.value, '', note)), 200)
+    # NoteTag
+    note_and_note_tags = NoteAndNoteTag.list_note_and_note_tag_by_note_id(id)
+    res_note = []
+    for i in note_and_note_tags:
+        note_tag_id = i.note_tag_id
+        note_tag = NoteTag.get_note_tag_by_id(note_tag_id)
+        res_note.append(note_tag.tag_name)
 
-    note_list = Note.query.filter_by(user_id=restore_note.user_id, is_valid=0).all()
-    return jsonify(res_note_list=[i.serialize() for i in note_list])
+    note = note.serialize()
+    note['tags'] = res_note
+    return make_response(jsonify(Res.ok(ResCode.NOTE_SUCCESS.value, '', note)), 200)
 
-
-@note.route('/remove', methods=['GET'])
-@cross_origin(origins='*', supports_credentials=True)
-def list_remove_note():
-    param_user_id = request.args.get('uid')
-    param_cur_page = request.args.get('curPage')
-    param_page_size = request.args.get('pageSize')
-
-    if param_cur_page == None:
-        param_cur_page = 1
-    else:
-        param_cur_page = int(request.args.get('curPage'))
-
-    if param_page_size == None:
-        param_page_size = 5
-    else:
-        param_page_size = int(request.args.get('pageSize'))
-    param_tags = request.args.get('tags')
-    note_list = Note.query.filter_by(user_id=param_user_id, is_valid=0).all()
-
-    note_list = list(note_list)
-    note_list_size = len(note_list)
-    start = (param_cur_page - 1) * param_page_size
-    end = param_cur_page * param_page_size
-    note_list = note_list[start:end]
-    res_note_list = [i.serialize() for i in note_list]
-    res_data = {'res_note_list': res_note_list, 'total': note_list_size}
-
-    return res_data
-
-
+""" 查找所有笔记 """
 @note.route('/list', methods=['GET'])
 @cross_origin(origins='*', supports_credentials=True)
 def list_note():
@@ -193,12 +169,9 @@ def list_note():
     res_note_list = [i.serialize() for i in note_list]
     res_data = {'res_note_list': res_note_list, 'total': note_list_size}
 
-    return res_data
+    return make_response(jsonify(Res.ok(ResCode.NOTE_SUCCESS.value,'', res_data)), 200)
 
-
-
-# @note.route('/list/condition', methods=['POST'])
-# @cross_origin(origins='*', supports_credentials=True)
+""" 根据条件去查找笔记 """
 def list_note_by_condition(param_user_id, param_tags):
     # param_data = request.get_json(silent=True)
     # param_user_id = param_data.get('uid')
@@ -229,21 +202,51 @@ def list_note_by_condition(param_user_id, param_tags):
     return note_list
 
 
-@note.route('/<id>', methods=['GET'])
-@cross_origin(origins='*', supports_credentials=True)
-def get_note_by_id(id):
-    note = Note.query.filter_by(id=id).first()
-    # NoteTag
-    note_and_note_tags = NoteAndNoteTag.list_note_and_note_tag_by_note_id(id)
-    res_note = []
-    for i in note_and_note_tags:
-        note_tag_id = i.note_tag_id
-        note_tag = NoteTag.get_note_tag_by_id(note_tag_id)
-        res_note.append(note_tag.tag_name)
 
-    note = note.serialize()
-    note['tags'] = res_note
-    return jsonify(note)
+"""根据用户ID查找回收站笔记"""
+@note.route('/remove', methods=['GET'])
+@cross_origin(origins='*', supports_credentials=True)
+def list_remove_note():
+    param_user_id = request.args.get('uid')
+    param_cur_page = request.args.get('curPage')
+    param_page_size = request.args.get('pageSize')
+
+    if param_cur_page == None:
+        param_cur_page = 1
+    else:
+        param_cur_page = int(request.args.get('curPage'))
+
+    if param_page_size == None:
+        param_page_size = 5
+    else:
+        param_page_size = int(request.args.get('pageSize'))
+    param_tags = request.args.get('tags')
+    note_list = Note.query.filter_by(user_id=param_user_id, is_valid=0).all()
+
+    note_list = list(note_list)
+    note_list_size = len(note_list)
+    start = (param_cur_page - 1) * param_page_size
+    end = param_cur_page * param_page_size
+    note_list = note_list[start:end]
+    res_note_list = [i.serialize() for i in note_list]
+    res_data = {'res_note_list': res_note_list, 'total': note_list_size}
+
+
+    return make_response(jsonify(Res.ok(ResCode.NOTE_DELETE_SUCCESS.value,'', res_data)), 200)
+
+@note.route('/remove/forever/<id>', methods=['GET'])
+@cross_origin(origins='*', supports_credentials=True)
+def remove_note_forever(id):
+    """永久删除"""
+    restore_note = Note.query.filter_by(id=id).first()
+    restore_note.is_valid = 9
+    db.session.add(restore_note)
+    db.session.commit()
+
+    note_list = Note.query.filter_by(user_id=restore_note.user_id, is_valid=0).all()
+    return jsonify(res_note_list=[i.serialize() for i in note_list])
+
+
 
 
 @note.route('/forward/save', methods=['POST'])
@@ -259,19 +262,17 @@ def forward_note_by_id():
     db.session.commit()
     return 'success'
 
-
+"""根据用户ID查找转发笔记"""
 @note.route('/forward/list', methods=['GET'])
 @cross_origin(origins='*', supports_credentials=True)
 def list_note_forward():
     param_user_id = request.args.get('uid')
     param_cur_page = request.args.get('curPage')
     param_page_size = request.args.get('pageSize')
-
     if param_cur_page == None:
         param_cur_page = 1
     else:
         param_cur_page = int(request.args.get('curPage'))
-
     if param_page_size == None:
         param_page_size = 5
     else:
@@ -286,9 +287,10 @@ def list_note_forward():
         note_forward.setdefault('title', note.title)
         user = User.get_user_by_id(note_forward.get('from_id'))
         note_forward.setdefault('username', user.username)
+        note_forward.setdefault('avatar', user.avatar)
+        note_forward.setdefault('forwardUid', user.id)
         note_forward.setdefault('user', user.serialize())
         note_forward_list.append(note_forward)
-
 
     print(note_forward_list)
 
@@ -300,7 +302,7 @@ def list_note_forward():
 
     res_data = {'res_note_forward_list': note_forward_list, 'total': note_forward_list_size}
 
-    return res_data
+    return make_response(jsonify(Res.ok(ResCode.NOTE_FORWARD_SUCCESS.value, '', res_data)), 200)
 
 
 # @note.route('/tag', methods=['PUT'])
@@ -322,6 +324,7 @@ def save_note_tags():
         NoteTag.save(tag_name=i, user_id=uid)
     return ''
 
+"""添加标签"""
 @note.route('/tag', methods=['PUT'])
 @cross_origin(origins='*', supports_credentials=True)
 def save_note_tag_by_tag_name():
@@ -329,13 +332,12 @@ def save_note_tag_by_tag_name():
     uid = param_data.get('uid')
     tag_name = param_data.get('tag')
     NoteTag.save(tag_name=tag_name, user_id=uid)
-    return ''
+    return make_response(jsonify(Res.ok(ResCode.NOTE_TAG_SUCCESS.value, '', {})))
 
-
+"""删除标签"""
 @note.route('/tag', methods=['DELETE'])
 @cross_origin(origins='*', supports_credentials=True)
 def delete_note_tag_by_tag_name():
-
     uid = request.args.get('uid')
     tag_name = request.args.get('tag')
     note_tag = NoteTag.get_note_tag_by_name(tag_name=tag_name, user_id=uid)
@@ -346,27 +348,35 @@ def delete_note_tag_by_tag_name():
             NoteAndNoteTag.save_note_and_note_tag(i)
         note_tag.is_valid = 0
         NoteTag.save_obj(note_tag)
-    return ''
+    return make_response(jsonify(Res.ok(ResCode.NOTE_TAG_SUCCESS.value, '', {})))
 
 
-
+"""查找标签"""
 @note.route('/tag/list', methods=['GET'])
 @cross_origin(origins='*', supports_credentials=True)
 def list_note_tag():
     param_user_id = request.args.get('uid')
-    # note_list = Note.query.filter(Note.user_id == param_user_id and Note.is_valid == 1).order_by(Note.updated_at.desc())
-    # note_tag_set = set()
-    # for note in note_list:
-    #     note_tag_list = NoteTag.query.filter_by(is_valid=1, note_id = note.id).all()
-    #     note_tag_set.update(note_tag_list)
-    # note_tag_name_list = []
-    # for i in note_tag_set:
-    #     tag_dict = {'text': i.tag_name, 'value': i.tag_name}
-    #     note_tag_name_list.append(tag_dict)
     note_tag_list = NoteTag.list_note_tag_by_user_id(param_user_id)
     note_tag_name_list = []
     for i in note_tag_list:
         tag_dict = {'value': i.tag_name, 'label': i.tag_name}
         note_tag_name_list.append(tag_dict)
-    return jsonify(note_tag_name_list=note_tag_name_list)
+    return make_response(jsonify(Res.ok(ResCode.NOTE_TAG_SUCCESS.value, '', note_tag_name_list)), 200)
 
+
+
+@note.route('/stat', methods=['GET'])
+@cross_origin(origins='*', supports_credentials=True)
+def list_note_stat():
+    param_user_id = request.args.get('uid')
+    print(param_user_id)
+    note_tag_list = NoteTag.list_note_tag_by_user_id(param_user_id)
+
+    res_note_stat = []
+    for i in note_tag_list:
+        temp_note_and_note_tag = NoteAndNoteTag.list_note_and_note_tag_by_note_tag_id(i.id)
+        stat = {}
+        stat['tag_name'] = i.tag_name
+        stat['note_count'] = len(list(temp_note_and_note_tag))
+        res_note_stat.append(stat)
+    return make_response(jsonify(Res.ok(200, '', res_note_stat)), 200)

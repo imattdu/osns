@@ -72,6 +72,12 @@ class User(db.Model):
         return user
 
     @staticmethod
+    def get_user_by_username(username):
+        """查找用户"""
+        user = User.query.filter_by(username=username).first()
+        return user
+
+    @staticmethod
     def get_user_by_id(id):
         """查找用户"""
         user = User.query.filter_by(id=id).first()
@@ -89,10 +95,10 @@ class UserLoginHistory(db.Model):
     __tablename__ = 'accounts_login_history'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)  # 主键
     # 用户名，用于登录
-    username = db.Column(db.String(64))
-    login_type = db.Column(db.String(64))
-    ip = db.Column(db.String(64))
-    ua = db.Column(db.String(64))
+    username = db.Column(db.String(255))
+    login_type = db.Column(db.String(255))
+    ip = db.Column(db.String(255))
+    ua = db.Column(db.String(255))
 
     # 创建时间
     created_at = db.Column(db.DateTime, default=datetime.now)
@@ -101,6 +107,40 @@ class UserLoginHistory(db.Model):
     # 建立用户的一对一关系属性user.note_list  note.user
     user = db.relationship('User', backref=db.backref('login_history', lazy='dynamic'))
 
+
+
+    def serialize(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'login_type': self.login_type,
+            'ip': self.ip,
+            'ua': self.ua,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'user_id': self.user_id
+        }
+
+    def __init__(self):
+        pass
+
+    def __init__(self, username,login_type, ip, ua, user_id):
+        self.username = username
+        self.login_type = login_type
+        self.ip = ip
+        self.ua = ua
+        self.user_id = user_id
+
+
+    @staticmethod
+    def save_user_login_history(user_login_history):
+        db.session.add(user_login_history)
+        db.session.commit()
+
+
+    @staticmethod
+    def list_user_login_history_by_uid(uid):
+        user_login_history_list = UserLoginHistory.query.order_by(UserLoginHistory.created_at.desc()).filter(UserLoginHistory.user_id==uid)
+        return user_login_history_list
 
 
 class UserProfile(db.Model):
@@ -155,6 +195,7 @@ class UserProfile(db.Model):
     def update_user_profile(userprofile):
         db.session.add(userprofile)
         db.session.commit()
+
 
 class Note(db.Model):
     """ 用户模型 """
@@ -320,9 +361,6 @@ class NoteTag(db.Model):
         return note_tag
 
 
-
-
-
 class NoteAndNoteTag(db.Model):
     """ 笔记分享 """
     __tablename__ = 'note_and_note_tag'
@@ -358,28 +396,3 @@ class NoteAndNoteTag(db.Model):
         note_and_note_tag_list = NoteAndNoteTag.query.filter_by(note_tag_id=note_tag_id, is_valid=1).all()
         return note_and_note_tag_list
 
-
-
-class NoteCollect(db.Model):
-    """ 笔记分享 """
-    __tablename__ = 'note_note_collect'
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)  # 主键
-    is_valid = db.Column(db.SmallInteger, default=1)
-    # 创建时间
-    created_at = db.Column(db.DateTime, default=datetime.now)
-    # 关联用户
-    user_id = db.Column(db.Integer, db.ForeignKey('accounts_user.id'))
-    note_id = db.Column(db.Integer, db.ForeignKey('note_note.id'))
-    # 建立用户的一对一关系属性user.note_list  note.user
-    user = db.relationship('User', backref=db.backref('note_collect_list', lazy='dynamic'))
-    note = db.relationship('Note', backref=db.backref('note_collect_list', lazy='dynamic'))
-
-    """序列化"""
-    def serialize(self):
-        return {
-            'id': self.id,
-            'is_valid': self.is_valid,
-            'created_at': self.created_at.strftime('%Y/%m/%d %H:%M:%S'),
-            'user_id': self.user_id,
-            'note_id': self.note_id
-        }
