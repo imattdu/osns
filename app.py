@@ -39,6 +39,7 @@ for file in os.listdir(app.config['UPLOAD_FOLDER']):
 
 
 @app.route('/upload', methods = ['GET', 'POST'])
+@cross_origin(origins='*', supports_credentials=True)
 def uploader():
    if request.method == 'POST':
 
@@ -51,7 +52,7 @@ def uploader():
         filename = str(time.time()) + str(random.randint(1, 9)) + '.' + filename_list[1]
         # f.save(os.path.join(app.config['UPLOAD_FOLDER'],secure_filename(f.filename)))
         f.save(os.path.join(app.config['UPLOAD_FOLDER'],filename))
-        url = 'http://osns.cn1.utools.club/static/' + filename
+        url = 'http://192.168.96.7:9000/static/' + filename
         return url
 
 
